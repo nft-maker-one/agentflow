@@ -265,6 +265,21 @@ class TestAgentEdit:
         r2 = await client.get("/api/workflows/wf_test_api/agents/echo/config")
         assert r2.json()["prompt"] == "Summarize: {{ payload.text }}"
 
+    async def test_patch_prompt_recompiles_template(self, client, deployed_state) -> None:
+        # Regression: patching the prompt must recompile the agent's cached
+        # Jinja template (`_compiled_prompt`), not just `cfg["prompt"]` —
+        # otherwise the runtime keeps rendering the OLD prompt (the editor
+        # showed the new field while runs still failed on the old one).
+        from agentkit.runtime.context import Event
+        r = await client.patch(
+            "/api/workflows/wf_test_api/agents/echo",
+            json={"prompt": "subject={{ payload.intent }}"},
+        )
+        assert r.status_code == 200
+        agent = deployed_state.agents_by_key[("wf_test_api", "echo")]
+        rendered = agent._render_compiled(Event("agent.x.in", {"intent": "ok"}))  # noqa: SLF001
+        assert rendered == "subject=ok"
+
     async def test_patch_unknown_workflow_404(self, client) -> None:
         r = await client.patch(
             "/api/workflows/nope/agents/echo",

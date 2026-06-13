@@ -20,7 +20,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
 from agentkit.common.logging import get_logger
-from agentkit.sdk.agent_class import Agent, _compile_python_handler
+from agentkit.sdk.agent_class import _JINJA_ENV, Agent, _compile_python_handler
 
 log = get_logger(__name__)
 
@@ -125,6 +125,17 @@ async def patch_agent(
             # Clearing the script — fall back to prompt/pass-through mode.
             agent._compiled_python_handler = None  # type: ignore[attr-defined]
             updates["python_script"] = None
+
+    # Recompile the cached Jinja template when the prompt changes — the
+    # handler renders `agent._compiled_prompt`, NOT `cfg["prompt"]`, so
+    # updating only the cfg left the runtime rendering the OLD template
+    # (the editor showed the new prompt while runs still failed on the
+    # old `{{ payload.<oldfield> }}`).
+    if "prompt" in updates:
+        new_prompt = updates["prompt"]
+        agent._compiled_prompt = (  # type: ignore[attr-defined]
+            _JINJA_ENV.from_string(new_prompt) if new_prompt else None
+        )
 
     for k, v in updates.items():
         cfg[k] = v
