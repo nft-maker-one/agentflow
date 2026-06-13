@@ -427,6 +427,51 @@ class AppState:
         except Exception:  # noqa: BLE001
             log.exception("api.persist_workflow_failed", workflow_id=workflow_id)
 
+    def prompt_field_violations(self, workflow_id: str) -> list[dict[str, str]]:
+        """Static check: an agent prompt references ``payload.<field>`` that
+        NO source can produce (not a start-input field, not any agent's
+        output, not an external source's output). Such a reference is a
+        workflow-level error — caught here (and surfaced in the UI / rejected
+        at run-create) rather than blanked at render time. A field that DOES
+        exist but simply hasn't arrived yet (fan-in) is fine — it renders
+        empty at runtime and is NOT reported here."""
+        from agentkit.sdk.agent_class import (  # noqa: PLC0415
+            referenced_payload_fields,
+        )
+
+        agents = [
+            (k, a) for (wf, k), a in self.agents_by_key.items() if wf == workflow_id
+        ]
+        # Fields the merged payload can ever carry downstream.
+        available: set[str] = set(
+            self.start_input_fields_by_workflow.get(workflow_id, ["q"]),
+        )
+        for _k, a in agents:
+            of = getattr(a, "_handler_cfg", {}).get("output_field")
+            if of:
+                available.add(of)
+        for s in self.external_io.list_for_workflow(workflow_id).get("sources", []):
+            of = (s.get("config") or {}).get("output_field")
+            if of:
+                available.add(of)
+
+        violations: list[dict[str, str]] = []
+        for key, a in agents:
+            cfg = getattr(a, "_handler_cfg", {})
+            refs = referenced_payload_fields(cfg.get("prompt")) | \
+                referenced_payload_fields(cfg.get("system_prompt"))
+            for field in sorted(refs - available):
+                violations.append({
+                    "agent": key,
+                    "field": field,
+                    "message": (
+                        f"Agent '{key}' references payload.{field}, but no "
+                        f"start-input field or upstream output produces it "
+                        f"(available: {sorted(available)})."
+                    ),
+                })
+        return violations
+
     async def undeploy_workflow(self, workflow_id: str) -> None:
         """Tear down a workflow — stops worker, drops IR/plan."""
         worker = self.workers.pop(workflow_id, None)

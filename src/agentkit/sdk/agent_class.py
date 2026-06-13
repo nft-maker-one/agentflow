@@ -50,8 +50,8 @@ from typing import Any, ClassVar
 
 import orjson
 from jinja2 import (
+    ChainableUndefined,
     Environment,
-    StrictUndefined,
     Template as JinjaTemplate,
     TemplateError,
     UndefinedError,
@@ -604,9 +604,16 @@ def _default_template_key(cls: type) -> str:
 
 # Shared Jinja2 environment. Prompts are pre-compiled per agent in
 # ``Agent.__init__`` (see ``_compiled_prompt`` / ``_render_compiled``);
-# this env is the single compiler. ``StrictUndefined`` makes missing
-# variables fail loudly at render time instead of silently blanking.
-_JINJA_ENV = Environment(undefined=StrictUndefined)
+# this env is the single compiler.
+#
+# ``ChainableUndefined`` makes a missing field render as EMPTY rather than
+# raise — including through chained access like
+# ``{{ payload._inputs['agent.x.out'].result }}``. This is required for
+# fan-out / fan-in: an aggregating agent may fire after only SOME upstream
+# inputs arrived, so a template referencing a not-yet-present input must
+# render blank, not crash the run. (Trade-off: a genuine typo now renders
+# empty instead of erroring; template SYNTAX errors still raise.)
+_JINJA_ENV = Environment(undefined=ChainableUndefined)
 
 
 def _render_prompt(template: str, event: Event) -> str:
@@ -643,6 +650,27 @@ def _render_template(tmpl: JinjaTemplate, event: Event) -> str:
             f"Available payload fields: {keys}. "
             f"Reference a field as {{{{ payload.<field> }}}} or {{{{ <field> }}}}."
         ) from e
+
+
+#: Matches the TOP-LEVEL field of a ``{{ payload.<field> ... }}`` reference.
+#: The first char must be a letter, so framework-injected ``_``-prefixed keys
+#: (``_inputs`` / ``_meta`` / ``_reply_to`` …) are intentionally skipped — and
+#: so are per-source accessors like ``payload._inputs['agent.x.out']`` whose
+#: presence is decided at runtime (fan-in).
+_PAYLOAD_FIELD_RE = re.compile(r"\{\{\s*payload\.([A-Za-z][A-Za-z0-9_]*)")
+
+
+def referenced_payload_fields(template: str | None) -> set[str]:
+    """Return the top-level ``payload.<field>`` names a template references.
+
+    Used for STATIC validation: a referenced field that no start-input
+    field or upstream agent output can produce is a workflow-level error
+    (caught before any run), distinct from a field that merely hasn't
+    arrived yet at runtime (rendered empty — see ``ChainableUndefined``).
+    """
+    if not template:
+        return set()
+    return set(_PAYLOAD_FIELD_RE.findall(template))
 
 
 def _render_context(event: Event) -> dict[str, object]:

@@ -88,6 +88,10 @@ class WorkflowDetail(BaseModel):
     # the right ``payload.<field>`` variables to downstream agents.
     # Defaults to ``["q"]`` for backward compat.
     start_input_fields: list[str] = Field(default_factory=lambda: ["q"])
+    # Static validation: agent prompts that reference a `payload.<field>`
+    # no source can produce. Non-empty ⇒ the workflow is NOT runnable; the
+    # UI disables Run and shows these, and POST /runs is rejected.
+    prompt_field_errors: list[dict[str, str]] = Field(default_factory=list)
     # Number of topology snapshots in the undo stack. Frontend uses
     # this to enable/disable the "Undo" button.
     undo_depth: int = 0

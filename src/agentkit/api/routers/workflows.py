@@ -87,6 +87,7 @@ async def get_workflow(wf_id: str, req: Request) -> WorkflowDetail:
         edges=edges,
         project_id=state.workflow_to_project.get(ir.id, "default"),
         start_input_fields=state.start_input_fields_by_workflow.get(ir.id, ["q"]),
+        prompt_field_errors=state.prompt_field_violations(ir.id),
         undo_depth=len(state.spec_history_by_workflow.get(ir.id, [])),
         workflow_guardrail=workflow_guardrail,
         mode=state.workflow_modes.get(ir.id, "normal"),

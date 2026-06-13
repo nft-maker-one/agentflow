@@ -139,6 +139,21 @@ async def patch_agent(
 
     for k, v in updates.items():
         cfg[k] = v
+
+    # Persist the change. `persist_workflow` rebuilds each agent's stored
+    # `agent_kwargs` from `agent.meta.raw_kwargs`, so mirror the patched
+    # fields there — otherwise a backend restart restores the OLD prompt
+    # (the edit appeared to "revert" after restart).
+    meta = getattr(agent, "meta", None)
+    raw = getattr(meta, "raw_kwargs", None)
+    if isinstance(raw, dict):
+        for k, v in updates.items():
+            raw[k] = v
+    try:
+        await state.persist_workflow(wf_id)
+    except Exception:  # noqa: BLE001
+        log.exception("api.agent.config_patch_persist_failed", workflow_id=wf_id)
+
     log.info(
         "api.agent.config_patched",
         workflow_id=wf_id, template_key=key,

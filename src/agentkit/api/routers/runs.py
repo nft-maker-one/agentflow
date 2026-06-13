@@ -23,6 +23,18 @@ router = APIRouter(prefix="/runs", tags=["runs"])
 @router.post("", response_model=RunSummary, status_code=201)
 async def create_run(req: Request, body: CreateRunRequest) -> RunSummary:
     state = req.app.state.app_state
+    # Refuse to run a workflow whose prompts reference fields nothing can
+    # produce — fail loudly here instead of letting every agent render a
+    # blank and silently misbehave. The UI also disables Run on these.
+    violations = state.prompt_field_violations(body.workflow_id)
+    if violations:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "workflow has unresolved prompt fields — fix them before running",
+                "prompt_field_errors": violations,
+            },
+        )
     try:
         run = await state.orchestrator.create_run(
             workflow_id=body.workflow_id, input=body.input,

@@ -137,17 +137,20 @@ class TestPromptPrecompile:
         ev = Event("agent.t.in", {"topic": "羽扇纶巾"})
         assert a._render_compiled(ev) == "subject=羽扇纶巾 env=agent.t.in"
 
-    def test_strict_undefined_still_raises_on_missing_var(self) -> None:
-        # A missing variable still fails loudly — now as an actionable
-        # PermanentError (which classifies FATAL: no pointless retries),
-        # wrapping the underlying Jinja UndefinedError as its cause.
-        from agentkit.common.errors import PermanentError
-        from jinja2 import UndefinedError
-        a = _prompt_agent("Hello {{ missing }}")
-        with pytest.raises(PermanentError) as ei:
-            a._render_compiled(Event("agent.t.in", {}))
-        assert isinstance(ei.value.__cause__, UndefinedError)
-        assert "Available payload fields" in str(ei.value)
+    def test_missing_var_renders_empty(self) -> None:
+        # Missing fields render EMPTY (ChainableUndefined), not raise — a
+        # fan-in agent may fire before all upstream inputs arrived, so a
+        # template referencing a not-yet-present field must blank, not crash.
+        a = _prompt_agent("Hello {{ missing }}!")
+        assert a._render_compiled(Event("agent.t.in", {})) == "Hello !"
+
+    def test_missing_chained_input_renders_empty(self) -> None:
+        # The fan-out/fan-in case: `payload._inputs['<topic>'].result` for a
+        # source that hasn't arrived yet must render empty, not raise
+        # "'dict object' has no attribute '<topic>'".
+        a = _prompt_agent("got={{ payload._inputs['agent.x.out'].result }}")
+        ev = Event("agent.t.in", {"_inputs": {"agent.y.out": {"result": "y"}}})
+        assert a._render_compiled(ev) == "got="
 
     def test_bad_template_fails_fast_at_construction(self) -> None:
         from jinja2 import TemplateSyntaxError

@@ -19,6 +19,10 @@ interface Props {
    *  trigger a Run from a remote button using the same input. */
   onValuesChange?: (values: Record<string, unknown>) => void;
   isSubmitting?: boolean;
+  /** Block the Run button (e.g. workflow has unresolved prompt fields). */
+  runDisabled?: boolean;
+  /** Tooltip explaining why Run is disabled. */
+  runDisabledReason?: string;
   /** Workflow id — needed for the "save schema" PUT. */
   workflowId?: string;
   /** Currently-saved field names from the workflow. Used to compute
@@ -62,7 +66,7 @@ interface Field {
  */
 export function PromptInputForm({
   promptTemplate, firstAgentKey, initial, onSubmit, onValuesChange, isSubmitting,
-  workflowId, savedFields, workflowAgents = [],
+  runDisabled = false, runDisabledReason, workflowId, savedFields, workflowAgents = [],
 }: Props) {
   const promptVars = useMemo(
     () => extractPayloadVariables(promptTemplate ?? ""),
@@ -458,10 +462,12 @@ export function PromptInputForm({
 
         <button
           onClick={submit}
-          disabled={isSubmitting || (!rawMode && errors.size > 0)}
+          disabled={isSubmitting || runDisabled || (!rawMode && errors.size > 0)}
+          title={runDisabled ? runDisabledReason : undefined}
           className="mt-3 w-full px-4 py-2 bg-blue-600 hover:bg-blue-700
-                     disabled:bg-blue-400 text-white text-sm font-medium
-                     rounded transition flex items-center justify-center gap-1.5"
+                     disabled:bg-blue-400 disabled:cursor-not-allowed text-white
+                     text-sm font-medium rounded transition flex items-center
+                     justify-center gap-1.5"
         >
           {isSubmitting ? "Starting…" : <>▶ Run</>}
         </button>

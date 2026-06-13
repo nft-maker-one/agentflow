@@ -483,8 +483,33 @@ export default function WorkflowDetailPage() {
 
   const isRunning = activeRun?.status === "Running";
 
+  // Static prompt-field validation (from the backend). Non-empty ⇒ a
+  // prompt references a payload.<field> nothing can produce → not runnable.
+  const promptErrors = wf.prompt_field_errors ?? [];
+  const runnable = promptErrors.length === 0;
+
   return (
     <div className="space-y-6">
+      {promptErrors.length > 0 && (
+        <div className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-3">
+          <div className="text-sm font-semibold text-rose-800">
+            ⚠ This workflow can't run — {promptErrors.length} unresolved prompt field
+            {promptErrors.length > 1 ? "s" : ""}
+          </div>
+          <ul className="mt-1.5 space-y-1 text-xs text-rose-700 list-disc list-inside">
+            {promptErrors.map((e, i) => (
+              <li key={i}>
+                <code className="font-mono">{e.agent}</code> references{" "}
+                <code className="font-mono">payload.{e.field}</code> — no start-input
+                field or upstream output produces it.
+              </li>
+            ))}
+          </ul>
+          <div className="mt-1.5 text-[11px] text-rose-600">
+            Fix the prompt (use an existing field) or add the field to the input schema, then Run is re-enabled.
+          </div>
+        </div>
+      )}
       {/* Non-blocking notice: a background refetch failed but we're
           still showing the last-known-good workflow. Does NOT replace
           the graph (that was the disappearing-graph bug). */}
@@ -650,11 +675,15 @@ export default function WorkflowDetailPage() {
               <>
                 <button
                   onClick={triggerRunFromToolbar}
-                  disabled={runMutation.isPending}
+                  disabled={runMutation.isPending || !runnable}
                   className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700
-                             disabled:bg-blue-400 text-white rounded inline-flex
-                             items-center gap-1"
-                  title="Trigger a Run with the current form input"
+                             disabled:bg-blue-400 disabled:cursor-not-allowed
+                             text-white rounded inline-flex items-center gap-1"
+                  title={
+                    runnable
+                      ? "Trigger a Run with the current form input"
+                      : "Disabled — fix the unresolved prompt field(s) above first"
+                  }
                 >
                   ▶ Run
                 </button>
@@ -839,6 +868,8 @@ export default function WorkflowDetailPage() {
             onSubmit={triggerRunWith}
             onValuesChange={setFormInput}
             isSubmitting={runMutation.isPending}
+            runDisabled={!runnable}
+            runDisabledReason="Fix the unresolved prompt field(s) shown above first"
           />
           <p className="text-[10px] text-slate-500 mt-1.5">
             Tip: the toolbar <code>▶ Run</code> button uses these values too.

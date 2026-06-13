@@ -49,6 +49,9 @@ export interface WorkflowDetail {
   edges: GraphEdge[];
   project_id: string;
   start_input_fields: string[];
+  /** Static validation: prompts referencing a payload.<field> nothing
+   *  produces. Non-empty ⇒ workflow not runnable (Run disabled). */
+  prompt_field_errors: { agent: string; field: string; message: string }[];
   undo_depth: number;
   /** Workflow-level run-quota caps. null = use project/framework defaults. */
   workflow_guardrail: { max_total_tokens: number; max_cycles_per_run: number } | null;

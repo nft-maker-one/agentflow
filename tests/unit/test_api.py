@@ -279,6 +279,40 @@ class TestAgentEdit:
         agent = deployed_state.agents_by_key[("wf_test_api", "echo")]
         rendered = agent._render_compiled(Event("agent.x.in", {"intent": "ok"}))  # noqa: SLF001
         assert rendered == "subject=ok"
+        # Persistence: the patched prompt must be mirrored into the agent's
+        # construction kwargs (what persist_workflow stores) so a restart
+        # doesn't revert it.
+        assert agent.meta.raw_kwargs["prompt"] == "subject={{ payload.intent }}"
+
+    async def test_run_blocked_on_unresolved_prompt_field(self, client) -> None:
+        # Reference a field nothing produces → workflow non-runnable.
+        await client.patch(
+            "/api/workflows/wf_test_api/agents/echo",
+            json={"prompt": "Use {{ payload.nope }}"},
+        )
+        wf = (await client.get("/api/workflows/wf_test_api")).json()
+        assert any(e["field"] == "nope" for e in wf["prompt_field_errors"])
+        # POST /runs is rejected with the violations.
+        r = await client.post(
+            "/api/runs",
+            json={"workflow_id": "wf_test_api", "input": {"q": "hi"}},
+        )
+        assert r.status_code == 400
+        assert "prompt_field_errors" in str(r.json())
+
+    async def test_run_allowed_when_prompt_field_is_a_start_field(self, client) -> None:
+        # `q` is the default start-input field → satisfiable → runnable.
+        await client.patch(
+            "/api/workflows/wf_test_api/agents/echo",
+            json={"prompt": "Use {{ payload.q }}"},
+        )
+        wf = (await client.get("/api/workflows/wf_test_api")).json()
+        assert wf["prompt_field_errors"] == []
+        r = await client.post(
+            "/api/runs",
+            json={"workflow_id": "wf_test_api", "input": {"q": "hi"}},
+        )
+        assert r.status_code == 201
 
     async def test_patch_unknown_workflow_404(self, client) -> None:
         r = await client.patch(
