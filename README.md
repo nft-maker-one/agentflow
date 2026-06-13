@@ -1,5 +1,7 @@
 # Agentflow
 
+**English** | [中文](README.zh-CN.md)
+
 Agentflow is a distributed, event-driven Agent orchestration framework which is dedicated to make agent system creating and editing as efficient as docx editing in office.  
 Every builder who is interested in of event driven agent workflow is warmly welcomed, please directly message me at github or email wjluo57@gmail.com
 
