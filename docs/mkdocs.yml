@@ -1,0 +1,93 @@
+site_name: AgentKit Documentation
+site_description: Python SDK for distributed event-driven Agent orchestration
+site_url: https://nft-maker-one.github.io/agentflow/
+repo_url: https://github.com/nft-maker-one/agentflow
+edit_uri: edit/main/docs/sdk/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: violet
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: violet
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - search.suggest
+    - content.code.copy
+    - content.code.annotate
+
+docs_dir: sdk
+nav:
+  - Home: index.md
+  - 部署与配置: deployment.md
+  - 快速入门: getting-started.md
+  - Agent 定义: agent.md
+  - Workflow 构建: workflow.md
+  - External I/O: external-io.md
+  - 控制平面客户端: client.md
+  - 消息通知: inbox.md
+  - 测试工具: testing.md
+  - CLI 命令: cli.md
+  - API 参考: api-reference.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+  # Multi-language site. Default = Chinese; English pages live alongside
+  # as `*.en.md` (suffix structure). Until those exist, every English
+  # page falls back to the Chinese source (fallback_to_default), so the
+  # site builds cleanly with zero translated files. `reconfigure_material`
+  # injects the language switcher into the Material theme automatically.
+  - i18n:
+      docs_structure: suffix
+      fallback_to_default: true
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: zh
+          name: 简体中文
+          default: true
+          build: true
+        - locale: en
+          name: English
+          build: true
+          # Map the (Chinese) default-nav titles to English. Page bodies
+          # are translated separately by adding `*.en.md` files later.
+          nav_translations:
+            部署与配置: Deployment & Config
+            快速入门: Getting Started
+            Agent 定义: Defining Agents
+            Workflow 构建: Building Workflows
+            控制平面客户端: Control Plane Client
+            消息通知: Notifications
+            测试工具: Testing Utilities
+            CLI 命令: CLI Commands
+            API 参考: API Reference
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/nft-maker-one/agentflow

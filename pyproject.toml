@@ -1,0 +1,150 @@
+[project]
+name = "agentkit"
+version = "0.1.0"
+description = "Distributed event-driven Agent orchestration framework"
+authors = [{ name = "AgentKit Team" }]
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.11"
+dependencies = [
+    # Core data modeling and config
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.1.0",
+    # Logging
+    "structlog>=24.1.0",
+    # IDs
+    "python-ulid>=2.7.0",
+    # EventBus client
+    "aiokafka>=0.11.0",
+    # Async helpers
+    "anyio>=4.2.0",
+    # Retry helpers used across modules
+    "tenacity>=8.2.0",
+    # Used by bus envelope serde
+    "orjson>=3.9.0",
+    # LLM module
+    "openai>=1.30.0",
+    "tiktoken>=0.7.0",
+    "httpx>=0.27.0",
+    # Workflow YAML loader
+    "pyyaml>=6.0.0",
+    # Runtime — JSON Schema validation in Gate 2
+    "jsonschema>=4.21.0",
+    # Guardrail — Redis backend (Doc07 §5)
+    "redis>=5.0.0",
+    # PostgresRunStore — async Postgres driver
+    "asyncpg>=0.29.0",
+    # Notifier — Jinja2 template rendering (Doc08 §5)
+    "jinja2>=3.1.0",
+    # CLI — Typer is a thin layer over click with much nicer UX
+    "typer>=0.12.0",
+    # Observability — metrics + tracing
+    "prometheus-client>=0.20.0",
+    "opentelemetry-api>=1.27.0",
+    "opentelemetry-sdk>=1.27.0",
+    # Control-plane API + UI server
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sse-starlette>=2.1.0",
+    "python-multipart>=0.0.10",
+    "anthropic>=0.107.0",
+]
+
+[project.scripts]
+agentkit = "agentkit.cli.main:app"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-benchmark>=4.0.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.4.0",
+    "mypy>=1.8.0",
+    # In-memory Redis for unit tests of Guardrail Lua scripts
+    "fakeredis>=2.21.0",
+    # Lua interpreter that fakeredis uses to evaluate EVAL scripts
+    "lupa>=2.0.0",
+]
+docs = [
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
+    # Multi-language (zh default + en) site with a language switcher.
+    "mkdocs-static-i18n>=1.2.0",
+]
+
+[project.urls]
+Documentation = "https://github.com/agentkit/agentkit"
+Repository = "https://github.com/agentkit/agentkit"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agentkit"]
+
+# ---- ruff: lint + format ----
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# Conservative but useful set; expand later if needed.
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # bugbear
+    "SIM", # simplify
+    "RUF", # ruff-specific
+    "PL",  # pylint subset
+    "PT",  # pytest style
+]
+ignore = [
+    "E501",   # long lines handled by formatter
+    "PLR0913", # many args (common in Pydantic constructors)
+    "PLR2004", # magic numbers (often fine in tests)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["N802", "N803"]  # snake_case relaxed in tests
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+# ---- pytest ----
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+]
+markers = [
+    "integration: requires external services (Kafka/Redis/PG via docker-compose)",
+    "e2e: full-stack end-to-end test (real Kafka+Redis+Prometheus)",
+    "perf: performance benchmark tests (run with --benchmark-only)",
+    "slow: tests that take >1s",
+]
+
+# ---- mypy ----
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+disallow_untyped_decorators = false
+files = ["src/agentkit"]
+
+[[tool.mypy.overrides]]
+module = ["aiokafka.*"]
+ignore_missing_imports = true

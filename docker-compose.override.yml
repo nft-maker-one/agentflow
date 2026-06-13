@@ -1,0 +1,9 @@
+# Local override: the host already runs a Postgres on 5432, so remap
+# AgentKit's Postgres to 5433 to avoid the port clash. Point the app at
+# it with AGENTKIT_PG_DSN=postgresql://agentkit:agentkit@localhost:5433/agentkit
+services:
+  postgres:
+    # !override replaces the base list instead of appending to it
+    # (Compose merges sequences by default, which would keep 5432).
+    ports: !override
+      - "5433:5432"

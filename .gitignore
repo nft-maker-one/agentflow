@@ -1,0 +1,45 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+.uv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+.benchmarks/
+.env
+.envrc
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# ---- Node / web frontend (build + deps) ----
+node_modules/
+web/node_modules/
+web/dist/
+web/.vite/
+
+# ---- Docs build output (mkdocs) ----
+docs/site/
+
+# ---- Local agent tooling / worktrees ----
+.claude/
+
+# ---- Intermediate verification / scratch artifacts ----
+cli_verify/
+
+# ---- Test / compile intermediates (belt-and-suspenders) ----
+*.pyo
+*.pyd
+.tox/
+.cache/
+.dmypy.json
+dmypy.json
+__pycache__/

@@ -1,0 +1,86 @@
+# =============================================================
+# AgentKit demo workflow — Topic → Outline → Polished Prose
+#
+# A two-step LLM pipeline that exercises every layer end-to-end:
+#
+#   __start__ ──► outliner ──► polisher ──► __end__
+#
+#  outliner: takes a topic, produces 4–6 bullet outline.
+#  polisher: takes the outline, produces a polished paragraph.
+#
+# Each Agent calls DeepSeek (`deepseek-chat`, the cheapest model
+# in the DeepSeek lineup as of this writing) via the OpenAI-
+# compatible adapter.
+#
+# Run with:
+#
+#   uv run python examples/hello_deepseek.py "the future of TCP/IP"
+#
+# Topic shorthand cheatsheet (Compiler ②a expand step):
+#
+#   • "topic"                 → agent.<key>.in.topic     (subscribe)
+#                              agent.<key>.out.topic     (publish)
+#   • "outliner.out.outline"  → agent.outliner.out.outline  (cross-agent)
+#   • "agent.x.in.y"          → unchanged (full form)
+#   • "events.audit.login"    → unchanged (any user-defined namespace)
+#
+# Per-agent override: set `topic_prefix:` (e.g. "events.outliner") to
+# replace the default `agent.<template_key>` base — useful in
+# production where you need to dodge namespace collisions.
+# =============================================================
+
+id: wf_hello_deepseek
+version: 1
+description: "Two-step DeepSeek pipeline (outline → polish)."
+
+agents:
+  outliner:
+    role: thinking
+    description: |
+      Receives a topic, calls DeepSeek to produce a concise 4–6
+      bullet outline. Publishes the outline alongside the original
+      topic so the next agent has full context.
+    subscribe:
+      - topic: topic            # → agent.outliner.in.topic
+    publish:
+      - topic: outline          # → agent.outliner.out.outline
+    llm:
+      provider: deepseek
+      model: deepseek-chat
+
+  polisher:
+    role: thinking
+    description: |
+      Receives the outline + topic, calls DeepSeek to render a
+      smooth ~120-word paragraph suitable for a blog intro.
+    subscribe:
+      - topic: outliner.out.outline   # cross-agent → agent.outliner.out.outline
+    publish:
+      - topic: prose                  # → agent.polisher.out.prose
+    llm:
+      provider: deepseek
+      model: deepseek-chat
+
+edges:
+  e_in:
+    from: __start__
+    to: outliner
+    via: topic                   # → agent.outliner.in.topic   (target's `in`)
+
+  e_to_polisher:
+    from: outliner
+    to: polisher
+    via: outline                 # → agent.outliner.out.outline (producer's `out`)
+
+  e_out:
+    from: polisher
+    to: __end__
+    via: prose                   # → agent.polisher.out.prose
+
+guardrails:
+  per_agent:
+    max_tokens_per_call: 4000
+    max_cycles: 3
+  per_run:
+    max_total_tokens: 50000
+    max_cycles_per_run: 20

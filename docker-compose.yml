@@ -1,0 +1,155 @@
+# Local development infrastructure for AgentKit (Doc02 Bus / Doc07 Guardrail
+# / Doc10 Observability).
+#
+# Bring up:    make up         (or `docker compose up -d`)
+# Tear down:   make down       (or `docker compose down -v`)
+#
+# Service map:
+#   redpanda      : 9092       Kafka-compatible broker (EventBus)
+#   redis         : 6379       Hot state, dedup, leader leases (Guardrail)
+#   postgres      : 5432       Authoritative state (Run / audit — Phase 2 wiring)
+#   otel-collector: 4317/4318  OTLP gRPC + HTTP receiver (Doc10 §2)
+#   prometheus    : 9090       Metrics scrape + storage  (Doc10 §4)
+#   grafana       : 3000       Dashboards  (default admin/admin)
+#
+# Optional: pass --profile observability to skip stack you don't need:
+#   docker compose --profile core up -d         # only redpanda+redis+postgres
+#   docker compose --profile observability up -d  # add prometheus/grafana/otel
+#   docker compose up -d                        # everything (default)
+
+services:
+  # ============================================================
+  # Core data plane
+  # ============================================================
+
+  redpanda:
+    image: redpandadata/redpanda:v24.2.7
+    container_name: agentkit-redpanda
+    profiles: ["core", "default"]
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --overprovisioned
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://localhost:9092
+      - --pandaproxy-addr=0.0.0.0:8082
+      - --advertise-pandaproxy-addr=localhost:8082
+    ports:
+      - "9092:9092"
+      - "8082:8082"
+      - "9644:9644"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks: [agentkit]
+
+  redis:
+    image: redis:7-alpine
+    container_name: agentkit-redis
+    profiles: ["core", "default"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [agentkit]
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: agentkit-postgres
+    profiles: ["core", "default"]
+    environment:
+      POSTGRES_USER: agentkit
+      POSTGRES_PASSWORD: agentkit
+      POSTGRES_DB: agentkit
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentkit"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [agentkit]
+
+  # ============================================================
+  # Observability stack (Doc10)
+  # ============================================================
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.108.0
+    container_name: agentkit-otel
+    profiles: ["observability", "default"]
+    command: ["--config=/etc/otel-collector.yaml"]
+    volumes:
+      - ./deploy/otel/otel-collector.yaml:/etc/otel-collector.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8888:8888"   # collector self-metrics
+    networks: [agentkit]
+
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: agentkit-prometheus
+    profiles: ["observability", "default"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom_data:/prometheus
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      # So Prometheus inside the container can scrape host's /metrics
+      # endpoint (where the agentkit process publishes its probes).
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [agentkit]
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: agentkit-grafana
+    profiles: ["observability", "default"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    networks: [agentkit]
+
+networks:
+  agentkit:
+    driver: bridge
+
+volumes:
+  pg_data:
+  prom_data:
+  grafana_data:

@@ -1,0 +1,52 @@
+# OTel Collector config for AgentKit dev stack.
+#
+# Phase 1: receive OTLP from the agentkit process and log spans to
+# stdout (sufficient to verify trace_id propagation works).
+# Phase 2: swap the ``debug`` exporter for OTLP-out to Tempo/Jaeger.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+
+  # Attach a service.namespace tag so this collector's spans can be
+  # filtered alongside other systems if you tee into a shared backend.
+  resource:
+    attributes:
+      - key: service.namespace
+        value: agentkit
+        action: upsert
+
+exporters:
+  debug:
+    verbosity: basic
+    sampling_initial: 5
+    sampling_thereafter: 100
+
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    namespace: agentkit_otel
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [resource, batch]
+      exporters: [debug]
+    metrics:
+      receivers: [otlp]
+      processors: [resource, batch]
+      exporters: [prometheus, debug]

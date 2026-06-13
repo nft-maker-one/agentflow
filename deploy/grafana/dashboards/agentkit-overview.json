@@ -1,0 +1,99 @@
+{
+  "title": "AgentKit Overview",
+  "uid": "agentkit-overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["agentkit"],
+  "timezone": "browser",
+  "refresh": "10s",
+  "time": {"from": "now-15m", "to": "now"},
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Compile attempts (5m)",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "targets": [
+        {"expr": "sum(increase(compile_total[5m]))", "refId": "A"}
+      ],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value"}
+    },
+    {
+      "type": "stat",
+      "title": "Runs started (5m)",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "targets": [
+        {"expr": "sum(increase(run_started_total[5m]))", "refId": "A"}
+      ],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value"}
+    },
+    {
+      "type": "stat",
+      "title": "Runs succeeded (5m)",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "targets": [
+        {"expr": "sum(increase(run_completed_total{terminal_status=\"Succeeded\"}[5m]))", "refId": "A"}
+      ],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value"}
+    },
+    {
+      "type": "stat",
+      "title": "Runs failed (5m)",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "targets": [
+        {"expr": "sum(increase(run_completed_total{terminal_status=\"Failed\"}[5m]))", "refId": "A"}
+      ],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value", "graphMode": "area"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}}
+    },
+    {
+      "type": "timeseries",
+      "title": "Run duration (P50 / P95)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "targets": [
+        {"expr": "histogram_quantile(0.5, sum(rate(run_duration_seconds_bucket[5m])) by (le, workflow_id))", "refId": "p50", "legendFormat": "p50 {{workflow_id}}"},
+        {"expr": "histogram_quantile(0.95, sum(rate(run_duration_seconds_bucket[5m])) by (le, workflow_id))", "refId": "p95", "legendFormat": "p95 {{workflow_id}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Agent events / sec by template",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "targets": [
+        {"expr": "sum(rate(agent_event_processed_total[1m])) by (template_key, result)", "refId": "A", "legendFormat": "{{template_key}} / {{result}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "LLM tokens / sec",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+      "targets": [
+        {"expr": "sum(rate(llm_tokens_total[1m])) by (provider, kind)", "refId": "A", "legendFormat": "{{provider}} / {{kind}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "LLM request duration (P50/P95)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+      "targets": [
+        {"expr": "histogram_quantile(0.5, sum(rate(llm_request_duration_seconds_bucket[5m])) by (le, provider))", "legendFormat": "p50 {{provider}}", "refId": "p50"},
+        {"expr": "histogram_quantile(0.95, sum(rate(llm_request_duration_seconds_bucket[5m])) by (le, provider))", "legendFormat": "p95 {{provider}}", "refId": "p95"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Notifier dispatches / sec",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+      "targets": [
+        {"expr": "sum(rate(notifier_sent_total[1m])) by (channel, severity, result)", "refId": "A", "legendFormat": "{{channel}}/{{severity}}/{{result}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Gating drops / sec",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+      "targets": [
+        {"expr": "sum(rate(gating_block_total[1m])) by (gate, template_key)", "refId": "A", "legendFormat": "{{gate}}/{{template_key}}"}
+      ]
+    }
+  ]
+}

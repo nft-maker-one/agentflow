@@ -1,0 +1,15 @@
+# Auto-load any JSON dashboard placed under /var/lib/grafana/dashboards.
+
+apiVersion: 1
+
+providers:
+  - name: agentkit
+    orgId: 1
+    folder: AgentKit
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false
