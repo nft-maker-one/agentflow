@@ -34,7 +34,7 @@ from agentkit.guardrail.models import (
 
 FRAMEWORK_DEFAULT_AGENT: AgentGuardrail = AgentGuardrail(
     max_tokens_per_call=8_000,
-    max_cycles=5,
+    max_cycles=50,
 )
 
 FRAMEWORK_DEFAULT_RUN: RunGuardrail = RunGuardrail(

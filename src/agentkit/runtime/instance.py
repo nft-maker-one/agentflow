@@ -61,6 +61,13 @@ from agentkit.workflow.plan import AgentPlan
 log = get_logger(__name__)
 
 
+# Sentinel workflow_id stamped by external_io on standalone (no active
+# run) ingestion — see ``ExternalIOManager.make_emit``. Such events are
+# global and must bypass the per-workflow isolation guard below, alongside
+# the empty string (legacy / untagged envelopes).
+_GLOBAL_WORKFLOW_IDS = frozenset({"", "external"})
+
+
 # ---- Public callback types ----
 
 StateChangeListener = Callable[[AgentSnapshot, AgentSnapshot, FSMTransition], Awaitable[None]]
@@ -359,6 +366,27 @@ class AgentInstance:
         self, msg: DeliveredMessage, sub: Subscriber,
     ) -> None:
         envelope = msg.envelope
+
+        # 0) Workflow isolation. Two deployed workflows that define the
+        # same agent / topic (e.g. both subscribe to ``agent.researcher.in``)
+        # each get an independent consumer group on the *same* bus stream,
+        # so every message is delivered to both. Drop envelopes stamped with
+        # a *different* workflow's id so a sibling workflow's run can't drive
+        # — or exhaust the guardrail of — this instance. Empty / "external"
+        # ids are global ingestion events and always pass.
+        wid = envelope.workflow_id
+        if wid not in _GLOBAL_WORKFLOW_IDS and wid != self._workflow_id:
+            log.debug(
+                "agent.skip.foreign_workflow",
+                agent_id=self._agent_id,
+                template_key=self._plan.template_key,
+                own_workflow_id=self._workflow_id,
+                envelope_workflow_id=wid,
+                event_id=envelope.event_id,
+            )
+            await self._bus.ack(sub, msg)
+            return
+
         # 1) FSM: Active → Processing (on event_arrived)
         await self._transit(
             FSMTransition.EVENT_ARRIVED, event_id=envelope.event_id,

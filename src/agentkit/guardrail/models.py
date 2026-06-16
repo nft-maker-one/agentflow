@@ -33,7 +33,12 @@ class AgentGuardrail(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     max_tokens_per_call: int = Field(default=8_000, ge=1)
-    max_cycles: int = Field(default=5, ge=1)
+    # Max cycles (≈ LLM calls) for a single agent WITHIN one run — a guard
+    # against a runaway / looping agent, not a lifetime budget. The old
+    # default of 5 was far too low once it (incorrectly) accumulated across
+    # runs; 50 leaves ample headroom for fan-in / iterative agents while
+    # still bounding an infinite loop (run-level cap is 200).
+    max_cycles: int = Field(default=50, ge=1)
 
 
 class RunGuardrail(BaseModel):

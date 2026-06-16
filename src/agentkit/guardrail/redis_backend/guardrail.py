@@ -251,7 +251,7 @@ class RedisGuardrail:
             )
 
         run_key = self._run_key(run_id)
-        agent_key = self._agent_key(agent_id)
+        agent_key = self._agent_key(run_id, agent_id)
         rsv_key = self._reservation_key(reservation.id)
 
         try:
@@ -267,6 +267,7 @@ class RedisGuardrail:
                 ctx.agent.max_cycles,
                 ttl_ms,
                 reservation.id,
+                self._settings.run_hash_ttl_seconds,
             )
         except RedisError as e:
             return self._fail_open_or_raise(
@@ -332,7 +333,7 @@ class RedisGuardrail:
             return
 
         run_key = self._run_key(reservation.run_id)
-        agent_key = self._agent_key(reservation.agent_id)
+        agent_key = self._agent_key(reservation.run_id, reservation.agent_id)
         rsv_key = self._reservation_key(reservation.id)
         cost_centi = int(round(actual_cost * COST_SCALE))
 
@@ -382,7 +383,7 @@ class RedisGuardrail:
             return
 
         run_key = self._run_key(reservation.run_id)
-        agent_key = self._agent_key(reservation.agent_id)
+        agent_key = self._agent_key(reservation.run_id, reservation.agent_id)
         rsv_key = self._reservation_key(reservation.id)
 
         try:
@@ -449,8 +450,14 @@ class RedisGuardrail:
     def _run_key(self, run_id: str) -> str:
         return f"{self._settings.namespace_prefix}:run:{run_id}"
 
-    def _agent_key(self, agent_id: str) -> str:
-        return f"{self._settings.namespace_prefix}:agent:{agent_id}"
+    def _agent_key(self, run_id: str, agent_id: str) -> str:
+        # Scoped by run_id so the per-agent cycle/token ledger resets each
+        # run (and expires with the run hash). Keying by agent_id alone made
+        # the per-agent ``max_cycles`` a *lifetime* cap that never reset —
+        # an instance was permanently denied after ``max_cycles`` events
+        # across all runs. The InProcess backend was always per-run; this
+        # aligns Redis with it.
+        return f"{self._settings.namespace_prefix}:agent:{run_id}:{agent_id}"
 
     def _reservation_key(self, reservation_id: str) -> str:
         return f"{self._settings.namespace_prefix}:reservation:{reservation_id}"
@@ -518,7 +525,7 @@ class RedisGuardrail:
     ) -> int:
         if self._redis is None:
             return 0
-        key = self._run_key(run_id) if layer == "run" else self._agent_key(agent_id)
+        key = self._run_key(run_id) if layer == "run" else self._agent_key(run_id, agent_id)
         field = "tokens_used" if dim == "tokens" else "cycles_used"
         try:
             v = await self._redis.hget(key, field)

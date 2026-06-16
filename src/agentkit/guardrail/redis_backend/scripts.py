@@ -64,7 +64,8 @@ PRECHECK_LUA = """
 --   run_limit_tokens, run_limit_cycles,
 --   agent_limit_tokens, agent_limit_cycles,
 --   reservation_ttl_ms,
---   reservation_id
+--   reservation_id,
+--   agent_hash_ttl_seconds
 
 local est_tokens         = tonumber(ARGV[1])
 local cycle_inc          = tonumber(ARGV[2])
@@ -74,6 +75,7 @@ local agent_limit_tokens = tonumber(ARGV[5])
 local agent_limit_cycles = tonumber(ARGV[6])
 local reservation_ttl_ms = tonumber(ARGV[7])
 local reservation_id     = ARGV[8]
+local agent_hash_ttl     = tonumber(ARGV[9])
 
 -- A previously-touched ``quota_exhausted=1`` short-circuits all
 -- subsequent precheck calls without further math.
@@ -95,7 +97,9 @@ local ag_cycles  = tonumber(redis.call('HGET', KEYS[2], 'cycles_used') or '0')
 if est_tokens > agent_limit_tokens then
     return {0, 'agent_tokens'}
 end
--- agent.max_cycles is cumulative for the instance lifetime.
+-- agent.max_cycles is cumulative WITHIN A RUN — the agent hash key is
+-- scoped by run_id (guardrail:agent:<run>:<agent>), so it resets each
+-- run and expires with the run hash. It is NOT a lifetime cap.
 if ag_cycles + cycle_inc > agent_limit_cycles then
     return {0, 'agent_cycles'}
 end
@@ -113,6 +117,9 @@ redis.call('HINCRBY', KEYS[1], 'cycles_used', cycle_inc)
 -- Track agent.tokens_used for telemetry only (not enforced).
 redis.call('HINCRBY', KEYS[2], 'tokens_used', est_tokens)
 redis.call('HINCRBY', KEYS[2], 'cycles_used', cycle_inc)
+-- The agent hash is run-scoped; bound its lifetime to the run hash so it
+-- doesn't linger forever (the previous lifetime key never expired).
+redis.call('EXPIRE', KEYS[2], agent_hash_ttl)
 redis.call('HINCRBY', KEYS[1], 'reservations_total', 1)
 
 -- Track reservation for later release / TTL.

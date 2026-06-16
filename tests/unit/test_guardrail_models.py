@@ -18,7 +18,7 @@ class TestAgentGuardrail:
     def test_defaults_doc07_2_5(self) -> None:
         g = AgentGuardrail()
         assert g.max_tokens_per_call == 8_000
-        assert g.max_cycles == 5
+        assert g.max_cycles == 50
 
     def test_min_one_token(self) -> None:
         with pytest.raises(ValidationError):
